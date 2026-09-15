@@ -1,14 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/env bash
 # ============================================================
-#  install-ai-cli.sh — OpenCode + MiMoCode installer (Termux)
-#  Para sa Xiaomi Pad 7 (aarch64), LineageOS/Termux
-#  Pareho silang kailangan ng proot + grun (glibc-runner)
-#  para ma-bypass ang Android seccomp "statx" block.
+#  install-ai-cli.sh — OpenCode installer (Termux)
+#  ============================================================
+#  Para sa Xiaomi Pad 7 (aarch64), LineageOS/Termux.
+#  Kailangan ng proot + grun (glibc-runner) para ma-bypass ang
+#  Android seccomp "statx" block.
+#
+#  NOTE: HiwALAY na installer ang MiMoCode (Xiaomi fork ng
+#  OpenCode) — nasa repo na: https://github.com/heje1221/mimo-install
 # ============================================================
 set -euo pipefail
 
 OPENCODE_BIN="$HOME/.opencode/bin/opencode"
-MIMO_BIN="$HOME/.mimocode/bin/mimo"
 WRAPPER_DIR="$HOME/.local/bin"
 GRUN="/data/data/com.termux/files/usr/glibc/bin/grun"
 PROOT="/data/data/com.termux/files/usr/bin/proot"
@@ -22,7 +25,7 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[x]${NC} $1"; exit 1; }
 
 # ------------------------------------------------------------
-# 0. Bootstrap — fresh Termux install
+# 0. Bootstrap — fresh Termux install (OpenCode lang)
 # ------------------------------------------------------------
 bootstrap() {
     say "Bootstrapping fresh Termux..."
@@ -36,10 +39,9 @@ bootstrap() {
         git clone "$REPO_URL" "$REPO_DIR" || fail "Git clone failed"
     fi
     cd "$REPO_DIR"
-    say "Bootstrap done. Running full install..."
+    say "Bootstrap done. Running OpenCode install..."
     install_deps
     install_opencode
-    install_mimo
     setup_env
 }
 
@@ -61,16 +63,15 @@ install_deps() {
 }
 
 # ------------------------------------------------------------
-# 2. Wrapper creator (shared: unset LD_PRELOAD + proot + grun)
+# 2. Wrapper creator
 # ------------------------------------------------------------
 make_wrapper() {
-    local name="$1" real_bin="$2"
-    local wrapper="$WRAPPER_DIR/$name"
+    local wrapper="$WRAPPER_DIR/opencode"
     mkdir -p "$WRAPPER_DIR"
     cat > "$wrapper" <<EOF
 #!/data/data/com.termux/files/usr/bin/env bash
 unset LD_PRELOAD
-exec "$PROOT" -k 0x20000000 "$GRUN" "$real_bin" "\$@"
+exec "$PROOT" -k 0x20000000 "$GRUN" "$OPENCODE_BIN" "\$@"
 EOF
     chmod +x "$wrapper"
     say "Wrapper created: $wrapper"
@@ -90,42 +91,18 @@ install_opencode() {
             || fail "OpenCode install failed"
     fi
     [ -x "$OPENCODE_BIN" ] || fail "OpenCode binary not found after install"
-    make_wrapper "opencode" "$OPENCODE_BIN"
+    make_wrapper
 
-    grep -q 'opencode' "$HOME/.bashrc" 2>/dev/null || cat >> "$HOME/.bashrc" <<EOF
+    grep -q 'local/bin' "$HOME/.bashrc" 2>/dev/null || cat >> "$HOME/.bashrc" <<EOF
 
-# opencode
-export PATH=\$HOME/.opencode/bin:\$PATH
-alias opencode="proot -k 0x20000000 grun ~/.opencode/bin/opencode"
+# opencode - wrapper sa ~/.local/bin/opencode (proot + grun)
+export PATH=\$HOME/.local/bin:\$PATH
 EOF
     say "OpenCode OK. Run: source ~/.bashrc && opencode"
 }
 
 # ------------------------------------------------------------
-# 4. Install MiMoCode (Xiaomi fork ng OpenCode)
-#    Official installer: curl -fsSL https://mimo.xiaomi.com/install | bash
-# ------------------------------------------------------------
-install_mimo() {
-    say "Installing MiMoCode (Xiaomi installer)..."
-    if [ -x "$MIMO_BIN" ]; then
-        warn "mimo binary exists na: $MIMO_BIN"
-    else
-        curl -fsSL https://mimo.xiaomi.com/install | bash \
-            || fail "MiMoCode install failed"
-    fi
-    [ -x "$MIMO_BIN" ] || fail "MiMo binary not found after install"
-    make_wrapper "mimo" "$MIMO_BIN"
-
-    grep -q 'mimocode' "$HOME/.bashrc" 2>/dev/null || cat >> "$HOME/.bashrc" <<EOF
-
-# mimocode (Xiaomi fork) - wrapper sa ~/.local/bin/mimo
-export PATH=\$HOME/.local/bin:\$PATH
-EOF
-    say "MiMoCode OK. Run: source ~/.bashrc && mimo"
-}
-
-# ------------------------------------------------------------
-# 5. API key setup (optional)
+# 4. API key setup (optional)
 # ------------------------------------------------------------
 setup_env() {
     if grep -qE 'OPENAI_API_KEY|ZEN_API_KEY' "$HOME/.bashrc" 2>/dev/null; then
@@ -144,19 +121,20 @@ setup_env() {
 usage() {
     cat <<EOF
 Usage: $0 [options]
-  --bootstrap  fresh Termux: git + deps + opencode + mimo (RECO after format)
-  --all        i-install dependencies + opencode + mimo (default)
-  --opencode   opencode lang
-  --mimo       mimo lang
+  --bootstrap  fresh Termux: git + deps + opencode (RECO after format)
+  --all        i-install dependencies + opencode (default)
+  --opencode   opencode lang (same as --all)
   --deps       dependencies lang
   --env        setup API key reminder
   -h, --help   help
+
+NOTE: MiMoCode ay nasa hiwalay na repo na:
+      https://github.com/heje1221/mimo-install
 
 Halimbawa:
   $0 --bootstrap      # fresh Termux (reco after format)
   $0 --all            # buong install
   $0 --opencode       # opencode lang
-  $0 --mimo           # mimo lang
 EOF
 }
 
@@ -167,7 +145,7 @@ banner() {
     cat <<"EOF"
 
  ====================================================
-      AI CLI INSTALLER — OpenCode + MiMoCode
+      AI CLI INSTALLER — OpenCode
       Termux | Xiaomi Pad 7 (aarch64)
  ====================================================
 EOF
@@ -178,13 +156,14 @@ show_menu() {
     echo
     echo "  Pumili ka ng gagawin:"
     echo
-    echo "    [1] Bootstrap (fresh Termux — git + lahat)  <-- RECO after format"
-    echo "    [2] Buong install  (deps + opencode + mimo)"
-    echo "    [3] OpenCode lang"
-    echo "    [4] MiMoCode lang"
-    echo "    [5] Dependencies lang"
-    echo "    [6] Setup API key reminder"
+    echo "    [1] Bootstrap (fresh Termux — git + opencode)  <-- RECO after format"
+    echo "    [2] OpenCode install (deps + opencode)"
+    echo "    [3] Dependencies lang"
+    echo "    [4] Setup API key reminder"
     echo "    [0] Exit"
+    echo
+    echo "  [i] MiMoCode? Nasa hiwalay na repo:"
+    echo "      https://github.com/heje1221/mimo-install"
     echo
 }
 
@@ -192,14 +171,12 @@ menu_loop() {
     local choice
     while true; do
         show_menu
-        read -rp "  Pumili [0-6]: " choice
+        read -rp "  Pumili [0-4]: " choice
         case "$choice" in
             1) bootstrap; return ;;
-            2) install_deps; install_opencode; install_mimo; setup_env; return ;;
-            3) install_deps; install_opencode; return ;;
-            4) install_deps; install_mimo; return ;;
-            5) install_deps; return ;;
-            6) setup_env; return ;;
+            2) install_deps; install_opencode; setup_env; return ;;
+            3) install_deps; return ;;
+            4) setup_env; return ;;
             0) echo "  Bye!"; exit 0 ;;
             *) warn "Invalid choice: $choice"; sleep 1 ;;
         esac
@@ -214,14 +191,11 @@ else
         bootstrap)
             bootstrap
             ;;
-        all|both)
-            install_deps; install_opencode; install_mimo; setup_env
+        all)
+            install_deps; install_opencode; setup_env
             ;;
         opencode)
             install_deps; install_opencode
-            ;;
-        mimo)
-            install_deps; install_mimo
             ;;
         deps)
             install_deps
