@@ -30,7 +30,7 @@ fail() { echo -e "${RED}[x]${NC} $1"; exit 1; }
 bootstrap() {
     say "Bootstrapping fresh Termux..."
     pkg update -y
-    pkg install -y git curl tar proot glibc-repo || warn "glibc-repo install failed"
+    pkg install -y git curl tar which proot glibc-repo || warn "glibc-repo install failed"
     pkg install -y glibc glibc-runner || fail "Hindi ma-install ang glibc/glibc-runner"
     termux-setup-storage
 
@@ -49,12 +49,12 @@ bootstrap() {
 # 1. Dependencies
 # ------------------------------------------------------------
 install_deps() {
-    say "Installing dependencies: proot, glibc-repo, glibc, glibc-runner, curl, tar..."
+    say "Installing dependencies: proot, glibc-repo, glibc, glibc-runner, curl, tar, which..."
     pkg update -y
-    pkg install -y proot curl tar glibc-repo || warn "glibc-repo install failed (baka naka-install na)"
+    pkg install -y proot curl tar which glibc-repo || warn "glibc-repo install failed (baka naka-install na)"
     pkg install -y glibc glibc-runner || fail "Hindi ma-install ang glibc/glibc-runner"
 
-    for t in proot curl tar; do
+    for t in proot curl tar which; do
         command -v "$t" >/dev/null 2>&1 || fail "Missing tool: $t"
     done
     [ -x "$PROOT" ]   || fail "proot not found: $PROOT"
